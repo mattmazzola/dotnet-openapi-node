@@ -1,5 +1,6 @@
 import React from 'react'
-import { Article, ArticleInput, getArticles, postArticle } from './client'
+import { Article, ArticleInput } from '@dotnetopenapinode/articles'
+import { articlesApi } from './client'
 import './App.css'
 
 function App() {
@@ -9,7 +10,7 @@ function App() {
     let isMounted = true
 
     async function execute() {
-      const articles = await getArticles()
+      const articles = await articlesApi.getArticles()
       if (isMounted) {
         setArticles(articles)
       }
@@ -44,7 +45,7 @@ function App() {
     }
 
     setIsFormDisabled(true)
-    const article = await postArticle(articleInput)
+    const article = await articlesApi.createArticle({ articleInput })
     setArticles(articles => [...articles, article])
     setIsFormDisabled(false)
   }
