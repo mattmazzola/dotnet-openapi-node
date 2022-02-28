@@ -120,9 +120,9 @@ steps:
     cacheHitVar: 'CACHE_HIT_CLIENT_APPLICATION_NODE_MODULES'
 
 - task: npmAuthenticate@0
-  displayName: Add auth info to .npmrc
+  displayName: Add auth info to client/.npmrc
   inputs:
-    workingFile: 'ClientGeneration/TypeScriptClient/.npmrc'
+    workingFile: 'client/.npmrc'
 
 - script: npm i
   workingDirectory: client
@@ -140,6 +140,11 @@ steps:
 - script: npm test
   workingDirectory: client
   displayName: client - npm test
+
+- task: npmAuthenticate@0
+  displayName: Add auth info to ClientGeneration/TypeScriptClient/.npmrc
+  inputs:
+    workingFile: 'ClientGeneration/TypeScriptClient/.npmrc'
 
 - script: npm publish
   workingDirectory: ClientGeneration/TypeScriptClient
