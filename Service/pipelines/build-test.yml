@@ -64,19 +64,37 @@ steps:
   workingDirectory: Service\Articles.Api
   displayName: Generate swagger.json
 
+- task: Cache@2
+  displayName: Restore and Cache OpenAPI.jar downloads
+  inputs:
+    # https://docs.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops#key-input
+    key: openapi-generator-cli
+    path: ClientGeneration/downloads
+    cacheHitVar: 'CACHE_HIT_OPENAPICLI'
+
 - powershell: md downloads
   workingDirectory: ClientGeneration
   displayName: Make downloads directory
+  # https://docs.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops#conditioning-on-cache-restoration
+  condition: ne(variables.CACHE_HIT_OPENAPICLI, 'true')
 
 # Download Generation Tool
 - powershell: Invoke-WebRequest -OutFile openapi-generator-cli.jar https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/5.3.0/openapi-generator-cli-5.3.0.jar
   workingDirectory: ClientGeneration/downloads
   displayName: Download OpenAPI jar
+  condition: ne(variables.CACHE_HIT_OPENAPICLI, 'true')
 
 # Generate Typescript Client
 - script: java -jar downloads/openapi-generator-cli.jar generate -i swagger.json -g typescript-fetch -o TypeScriptClient -c typescriptGenerationConfig.json -p=npmVersion="1.0.0-LOCAL"
   workingDirectory: ClientGeneration
   displayName: Generate Typescript Client
+
+- task: Cache@2
+  displayName: Restore and Cache TypescriptClient/node_modules
+  inputs:
+    key: ClientGeneration/TypeScriptClient/package.json
+    path: ClientGeneration/TypeScriptClient/node_modules
+    cacheHitVar: 'CACHE_HIT_GENERATED_CLIENT_NODE_MODULES'
 
 # Build TypescriptClient and link to client
 - script: npm i
@@ -92,6 +110,13 @@ steps:
   displayName: TypeScriptClient - npm link
 
 # Install, build, and test client
+- task: Cache@2
+  displayName: Restore and Cache client/node_modules
+  inputs:
+    key: client/package-lock.json
+    path: client/node_modules
+    cacheHitVar: 'CACHE_HIT_CLIENT_APPLICATION_NODE_MODULES'
+
 - script: npm i
   workingDirectory: client
   displayName: client - npm i
