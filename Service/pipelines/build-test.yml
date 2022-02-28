@@ -1,0 +1,110 @@
+# Note: Certain tokens only work when defining a run number; they don't work anywhere else in your pipeline.
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/process/run-number?view=azure-devops&tabs=yaml#tokens
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - Service/*
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - Service/*
+
+pool:
+  vmImage: 'windows-2022'
+
+variables:
+  solution: 'Service/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Debug'
+  CI: true
+
+steps:
+# Print Version and Build Info
+- script: echo '$(Build.BuildNumber)'
+  displayName: Display Build Number
+
+- script: echo '$(generatedPackageVersion)'
+  displayName: Display Package Version
+
+- script: dotnet --version
+  displayName: Display dotnet version
+
+- script: npm -v
+  displayName: Display npm version
+  
+# Build, Test, Publish Service and Generate swagger.json
+- script: dotnet build
+  workingDirectory: Service
+  displayName: dotnet build
+
+- script: dotnet test
+  workingDirectory: Service
+  displayName: dotnet test
+
+- script: dotnet tool restore
+  workingDirectory: Service
+  displayName: Install tools
+
+- script: dotnet tool list
+  workingDirectory: Service
+  displayName: List tools
+
+# TODO: Find how to get dll path from build instead of hard coding
+- script: dotnet tool run swagger tofile --output ..\..\ClientGeneration\swagger.json bin\Debug\net6.0\Articles.Api.dll v1
+  workingDirectory: Service\Articles.Api
+  displayName: Generate swagger.json
+
+- powershell: md downloads
+  workingDirectory: ClientGeneration
+  displayName: Make downloads directory
+
+# Download Generation Tool
+- powershell: Invoke-WebRequest -OutFile openapi-generator-cli.jar https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/5.3.0/openapi-generator-cli-5.3.0.jar
+  workingDirectory: ClientGeneration/downloads
+  displayName: Download OpenAPI jar
+
+# Generate Typescript Client
+- script: java -jar downloads/openapi-generator-cli.jar generate -i swagger.json -g typescript-fetch -o TypeScriptClient -c typescriptGenerationConfig.json -p=npmVersion="1.0.0-LOCAL"
+  workingDirectory: ClientGeneration
+  displayName: Generate Typescript Client
+
+# Build TypescriptClient and link to client
+- script: npm i
+  workingDirectory: ClientGeneration/TypeScriptClient
+  displayName: TypeScriptClient - npm i
+
+- script: npm ls
+  workingDirectory: ClientGeneration/TypeScriptClient
+  displayName: TypeScriptClient - npm ls
+
+- script: npm link
+  workingDirectory: ClientGeneration/TypeScriptClient
+  displayName: TypeScriptClient - npm link
+
+# Install, build, and test client
+- script: npm i
+  workingDirectory: client
+  displayName: client - npm i
+
+# Link to use generated package instead of version referenced in the package.json
+- script: npm link @dotnetopenapinode/articles
+  workingDirectory: client
+  displayName: client - npm link @dotnetopenapinode/articles
+
+- script: npm run build
+  workingDirectory: client
+  displayName: client - npm run build
+
+- script: npm test
+  workingDirectory: client
+  displayName: client - npm test
