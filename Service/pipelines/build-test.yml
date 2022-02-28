@@ -27,6 +27,8 @@ variables:
   buildPlatform: 'Any CPU'
   buildConfiguration: 'Debug'
   CI: true
+  # https://docs.microsoft.com/en-us/azure/devops/pipelines/process/run-number?view=azure-devops&tabs=yaml#how-can-you-reference-the-run-number-variable-within-a-script
+  generatedPackageVersion: '1.0.0-CI-$(Build.BuildNumber)'
 
 steps:
 # Print Version and Build Info
@@ -85,7 +87,7 @@ steps:
   condition: ne(variables.CACHE_HIT_OPENAPICLI, 'true')
 
 # Generate Typescript Client
-- script: java -jar downloads/openapi-generator-cli.jar generate -i swagger.json -g typescript-fetch -o TypeScriptClient -c typescriptGenerationConfig.json -p=npmVersion="1.0.0-LOCAL"
+- script: java -jar downloads/openapi-generator-cli.jar generate -i swagger.json -g typescript-fetch -o TypeScriptClient -c typescriptGenerationConfig.json -p=npmVersion="$(generatedPackageVersion)"
   workingDirectory: ClientGeneration
   displayName: Generate Typescript Client
 
@@ -117,6 +119,11 @@ steps:
     path: client/node_modules
     cacheHitVar: 'CACHE_HIT_CLIENT_APPLICATION_NODE_MODULES'
 
+- task: npmAuthenticate@0
+  displayName: Add auth info to .npmrc
+  inputs:
+    workingFile: 'ClientGeneration/TypeScriptClient/.npmrc'
+
 - script: npm i
   workingDirectory: client
   displayName: client - npm i
@@ -133,3 +140,7 @@ steps:
 - script: npm test
   workingDirectory: client
   displayName: client - npm test
+
+- script: npm publish
+  workingDirectory: ClientGeneration/TypeScriptClient
+  displayName: TypeScriptClient - npm publish
