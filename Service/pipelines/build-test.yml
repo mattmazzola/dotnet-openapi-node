@@ -105,7 +105,8 @@ steps:
 - task: Cache@2
   displayName: Restore and Cache TypescriptClient/node_modules
   inputs:
-    key: ClientGeneration/TypeScriptClient/package.json
+    # Cannot use package.json because package version is changed each build which invalidates cache even though dependencies do not change
+    key: TypescriptClient
     path: ClientGeneration/TypeScriptClient/node_modules
     cacheHitVar: 'CACHE_HIT_GENERATED_CLIENT_NODE_MODULES'
 
