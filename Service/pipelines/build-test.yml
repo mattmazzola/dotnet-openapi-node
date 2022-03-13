@@ -29,8 +29,19 @@ variables:
   CI: true
   # https://docs.microsoft.com/en-us/azure/devops/pipelines/process/run-number?view=azure-devops&tabs=yaml#how-can-you-reference-the-run-number-variable-within-a-script
   generatedPackageVersion: '1.0.0-CI-$(Build.BuildNumber)'
+  # https://github.com/Microsoft/azure-pipelines-tasks/issues/8793#issuecomment-641196722
+  isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+  ${{ if startsWith(variables['Build.SourceBranch'], 'refs/heads/') }}:
+    branchName: $[ replace(variables['Build.SourceBranch'], 'refs/heads/', '') ]
+  ${{ if startsWith(variables['Build.SourceBranch'], 'refs/pull/') }}:
+    branchName: $[ replace(variables['System.PullRequest.SourceBranch'], 'refs/heads/', '') ]
 
 steps:
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/scripts/git-commands?view=azure-devops&tabs=yaml#allow-scripts-to-access-the-system-token
+- checkout: self
+  persistCredentials: true
+  clean: true
+
 # Print Version and Build Info
 - script: echo '$(Build.BuildNumber)'
   displayName: Display Build Number
@@ -149,3 +160,34 @@ steps:
 - script: npm publish
   workingDirectory: ClientGeneration/TypeScriptClient
   displayName: TypeScriptClient - npm publish
+
+# Install published package into client
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#understand-variable-syntax
+- powershell: |
+    $packagename = npm ls | select-object -first 1 | select-string -Pattern '.[^@]+@[^\s]+' | foreach {$_.Matches.Value}
+    Write-Host "##vso[task.setvariable variable=PackageName;]$packagename"
+  workingDirectory: ClientGeneration/TypeScriptClient
+  displayName: Get @dotnetopenapinode/articles package version
+
+- script: npm add $(PackageName) --save-exact
+  workingDirectory: client
+  displayName: Install @dotnetopenapinode/articles into client
+
+- script: npm ls
+  workingDirectory: client
+  displayName: Verify install into client
+
+# Commit updated package change back to branch
+# https://docs.microsoft.com/en-us/azure/devops/pipelines/scripts/git-commands?view=azure-devops&tabs=yaml#how-do-i-avoid-triggering-a-ci-build-when-the-script-pushes
+- script: |
+    git config --global user.email "noreply@fastmail.com"
+    git config --global user.name "Build Pipeline"
+    git add client/package.json
+    git add client/package-lock.json
+    git commit -m "chore(build): update @dotnetopenapinode/articles package [skip ci]"
+    git checkout -b temp-branch
+    git checkout $(branchName)
+    git merge temp-branch
+    git push
+  displayName: Create commit of package changes and push commit to branch
+  condition: and(succeeded(), eq(variables.isMain, 'true'))
